@@ -1,0 +1,133 @@
+---
+title: "Group Project 1"
+output: pdf_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+require(survival)
+require(quantreg)
+require(glmnet)
+require(MASS)
+require(pROC)
+
+set.seed(2019)
+```
+
+
+# Project 3: Design a simulation study to compare variable selection methods
+
+When the number of candidate predictors in a linear model is large, variable selection is a common practice to find an optimal model that balances between model fitness and model complexity. 
+
+
+\begin{description}
+\item[Step-wise forward method:] Starting with the empty model, and iteratively adds the variables that best improves the model fit. That is often done by sequentially adding predictors with the largest reduction in AIC. For linear models,
+$$AIC = n\ln(\sum_{i=1}^n (y_i - \widehat{y}_i)^2/n) + 2p,$$ where $\widehat{y}_i$ is the fitted values from a model, and $p$ is the dimension of the model (i.e.,number of predictors plus 1).
+
+
+
+\item[Automated LASSO regression] LASSO is another   popular method for variable selection. It estimates the model parameters by optimizing a penalized loss function:
+$$\min_\beta \frac{1}{2n} \sum_{i=1}^n (y_i - x_i \beta )^2 + \lambda \lVert \sum_{k=1}^p|\beta_k|$$
+where $\lambda$ is a tunning parameter. Cross-validation (CV) is the most common selection criteria for LASSO.
+\end{description} 
+
+
+
+
+
+
+\paragraph{Your tasks:}  
+
+
+In modern applications with high-dimensional covariates, traditional variable selection methods often struggle with the presence of "weak" predictors. Design a simulation study to investigate and illustrate (1) how well each of the two methods in identifying weak and strong predictors, and (1) how missing  "weak" predictors impacts the parameter estimations.
+
+To do so, you need to simulate data with a combination of ``strong'',``weak-but-correlated'' and ``weak-and-independent'' predictors. Their definition can be found in the following. 
+
+Definition of strong signals --- 
+$$S_1=\{j:|\beta_j|>c\sqrt{log (p) / n},\mbox{ some } c>0,  1\le j \le p\}$$
+Definition of weak-but-correlated signals  ---
+$$S_2=\{j: 0<|\beta_j|\le c\sqrt{log (p) / n},\mbox{ some } c>0, \mbox{corr}(X_j, X_j')\ne 0, \mbox{for some } j'\in S_1,  1\le j \le p\}$$
+Definition of weak-and-independent signals  ---
+$$S_3=\{j: 0<|\beta_j|\le c\sqrt{log (p) / n},\mbox{ some } c>0, \mbox{corr}(X_j, X_j')= 0, \mbox{for all } j'\in S_1,  1\le j \le p\}$$
+
+\paragraph{R codes for forwarding selection and LASSO }
+
+```{r data_sim,  eval=F, echo = TRUE}
+# A sample codes for generating a data with a combinaton of true predictors and null predictors.
+set.seed(1)
+
+n <- 1000 # number of subjects (rows)
+p <- 50 # number of predictors (columns)
+c <- 4 # scalar to set strong vs weak predictor condition
+n.strong <- 10 # number of strong predictors
+n.weak.cor <- 20 # number of weak and correlated preds
+n.weak.ind <- 20 # number of weak and independent preds
+
+# specify correlation matrix
+cor.matrix = diag(p)
+sigma = 1
+cor.ind = sample(2:49, n.weak.cor)
+#correlations = runif(n = n.weak.cor, 0.1, 1) # generate 10 non-zero correlations
+cor.matrix[1, cor.ind] = cor.matrix[cor.ind, 1] = 0.4
+
+# generate data from multivariate normal with specified covariance structure
+X = MASS::mvrnorm(n = n,
+                  mu = rep(0, p),
+                  Sigma = sigma*cor.matrix,
+                  tol = 0.3)
+
+# set conditions for strong vs. weak predictors
+condition = c*sqrt(log(p)/n)
+
+b.strong.ind = sample(seq(1, p, 1)[-cor.ind], size = n.strong) # randomly designate strong predictors
+
+# generate strong coefficients
+strong <- NULL
+repeat{
+  ran = abs(rnorm(1))
+  if(ran > condition)
+    strong = c(strong, ran)
+  if(length(strong) == n.strong)
+    break
+}
+
+# generate weak (non-zero) coefficients
+weak <- NULL
+repeat{
+  ran = abs(rnorm(1))
+  if(ran <= condition && ran > 0)
+    weak = c(weak, ran)
+  if(length(weak) == n.weak.cor + n.weak.ind)
+    break
+}
+
+# list of all coefficients
+b.true = rep(0, p)
+b.true[b.strong.ind] = strong
+b.true[-b.strong.ind] = weak
+
+cat("True non-zero effects:", which(b.true != 0), "\n") # ground truth of strong predictors
+
+# generate outcome
+Y <- 1 + X %*% b.true + rnorm(n)
+
+df <- data.frame(cbind(X, Y))
+names(df)[p + 1] <- "y"
+
+```
+
+
+```{r}
+
+# Forward Selection
+fit.forward <- step(object = lm(y ~ 1, data = df),
+                    scope = formula(lm(y ~ ., data = df)), direction = "forward", k = 2n, trace = 0) # AIC
+summary(fit.forward)
+
+# LASSO
+fit.lasso <- cv.glmnet(X, Y, nfolds = 10, type.measure = "mse") # 5-fold CV using mean squared error
+param.best <- fit.lasso$glmnet.fit$beta[, fit.lasso$lambda == fit.lasso$lambda.1se] # one standard-error rule
+param.best[param.best != 0]
+```
+
+
