@@ -53,18 +53,18 @@ $$S_3=\{j: 0<|\beta_j|\le c\sqrt{log (p) / n},\mbox{ some } c>0, \mbox{corr}(X_j
 \paragraph{R codes for forwarding selection and LASSO }
 
 ```{r data_sim,  eval=F, echo = TRUE}
-
 n <- 1000 # number of subjects (rows)
 p <- 50 # number of predictors (columns)
 c <- 4 # scalar to set strong vs weak predictor condition
-n.strong <- 10 # number of strong predictors
-n.weak.cor <- 20 # number of weak and correlated preds
-n.weak.ind <- 20 # number of weak and independent preds
+n.strong <- 8 # number of strong predictors
+n.weak.cor <- 5 # number of weak and correlated preds
+n.weak.ind <- 7 # number of weak and independent preds
+n.null <- 30
 
 # specify correlation matrix
 cor.matrix = diag(p)
 sigma = 1
-set.seet(1)
+set.seed(1)
 cor.ind = sample(2:49, n.weak.cor)
 #correlations = runif(n = n.weak.cor, 0.1, 1) # generate 10 non-zero correlations
 cor.matrix[1, cor.ind] = cor.matrix[cor.ind, 1] = 0.4
@@ -79,7 +79,8 @@ X = MASS::mvrnorm(n = n,
 # set conditions for strong vs. weak predictors
 condition = c*sqrt(log(p)/n)
 
-b.strong.ind = sample(seq(1, p, 1)[-cor.ind], size = n.strong) # randomly designate strong predictors
+b.strong.index = sample(seq(1, p, 1)[-cor.ind], size = n.strong) # randomly designate strong predictors
+b.weak.index = sample(seq(1, p, 1)[-b.strong.index], size = n.weak.cor + n.weak.ind)
 
 # generate strong coefficients
 strong <- NULL
@@ -103,8 +104,8 @@ repeat{
 
 # list of all coefficients
 b.true = rep(0, p)
-b.true[b.strong.ind] = strong
-b.true[-b.strong.ind] = weak
+b.true[b.strong.index] = strong
+b.true[b.weak.index] = weak
 
 cat("True non-zero effects:", which(b.true != 0), "\n") # ground truth of strong predictors
 
@@ -124,7 +125,7 @@ fit.forward <- step(object = lm(y ~ 1, data = df),
                     scope = formula(lm(y ~ ., data = df)), direction = "forward", k = 2, trace = 0) # AIC
 params.forward = fit.forward$coefficients[-1]
 forward.varnumber = gsub(pattern = "X", replacement = "", x = names(params.forward))
-forward.varnumber = as.numeric(forward.varnumber)
+forward.varnumber = sort(as.numeric(forward.varnumber))
 
 # LASSO
 fit.lasso <- cv.glmnet(X, Y, nfolds = 10, type.measure = "mse") # 5-fold CV using mean squared error
@@ -134,7 +135,19 @@ lasso.varnumber = gsub(pattern = "V", replacement = "", x = names(params.lasso))
 lasso.varnumber = as.numeric(lasso.varnumber)
 ```
 
-```{r}
+```{r metrics}
+## Percentage of strong and weak predictors selected
+# weak predictors
+sum(b.weak.index %in% forward.varnumber) / (n.weak.cor + n.weak.ind) # forward
+sum(b.weak.index %in% lasso.varnumber) / (n.weak.cor + n.weak.ind) # lasso
+
+# strong predictors
+sum(b.strong.index %in% forward.varnumber) / n.strong # forward
+sum(b.strong.index %in% lasso.varnumber) / n.strong # lasso
+
+(sum(b.strong.index %in% forward.varnumber) + sum(b.weak.index %in% forward.varnumber)) / (p - n.null)
+
+## MSE
 
 ```
 
