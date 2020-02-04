@@ -53,8 +53,6 @@ $$S_3=\{j: 0<|\beta_j|\le c\sqrt{log (p) / n},\mbox{ some } c>0, \mbox{corr}(X_j
 \paragraph{R codes for forwarding selection and LASSO }
 
 ```{r data_sim,  eval=F, echo = TRUE}
-# A sample codes for generating a data with a combinaton of true predictors and null predictors.
-set.seed(1)
 
 n <- 1000 # number of subjects (rows)
 p <- 50 # number of predictors (columns)
@@ -66,11 +64,13 @@ n.weak.ind <- 20 # number of weak and independent preds
 # specify correlation matrix
 cor.matrix = diag(p)
 sigma = 1
+set.seet(1)
 cor.ind = sample(2:49, n.weak.cor)
 #correlations = runif(n = n.weak.cor, 0.1, 1) # generate 10 non-zero correlations
 cor.matrix[1, cor.ind] = cor.matrix[cor.ind, 1] = 0.4
 
 # generate data from multivariate normal with specified covariance structure
+set.seed(1)
 X = MASS::mvrnorm(n = n,
                   mu = rep(0, p),
                   Sigma = sigma*cor.matrix,
@@ -109,6 +109,7 @@ b.true[-b.strong.ind] = weak
 cat("True non-zero effects:", which(b.true != 0), "\n") # ground truth of strong predictors
 
 # generate outcome
+set.seed(1)
 Y <- 1 + X %*% b.true + rnorm(n)
 
 df <- data.frame(cbind(X, Y))
@@ -117,17 +118,24 @@ names(df)[p + 1] <- "y"
 ```
 
 
-```{r}
-
+```{r var_selection}
 # Forward Selection
 fit.forward <- step(object = lm(y ~ 1, data = df),
-                    scope = formula(lm(y ~ ., data = df)), direction = "forward", k = 2n, trace = 0) # AIC
-summary(fit.forward)
+                    scope = formula(lm(y ~ ., data = df)), direction = "forward", k = 2, trace = 0) # AIC
+params.forward = fit.forward$coefficients[-1]
+forward.varnumber = gsub(pattern = "X", replacement = "", x = names(params.forward))
+forward.varnumber = as.numeric(forward.varnumber)
 
 # LASSO
 fit.lasso <- cv.glmnet(X, Y, nfolds = 10, type.measure = "mse") # 5-fold CV using mean squared error
 param.best <- fit.lasso$glmnet.fit$beta[, fit.lasso$lambda == fit.lasso$lambda.1se] # one standard-error rule
-param.best[param.best != 0]
+params.lasso = param.best[param.best != 0]
+lasso.varnumber = gsub(pattern = "V", replacement = "", x = names(params.lasso))
+lasso.varnumber = as.numeric(lasso.varnumber)
+```
+
+```{r}
+
 ```
 
 
