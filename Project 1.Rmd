@@ -264,6 +264,7 @@ model_fit = function(n.rows, p = 50, n.strong, n.weak.ind, n.weak.cor, c = 4, co
   
   
   ##### INFORMATION EXTRACTION
+  # truth (null or nonnull predictor)
   predictor.designation = NULL
   for (i in 1:p) {
     if (i %in% c(b.strong.index, b.weak.index)) {
@@ -273,6 +274,7 @@ model_fit = function(n.rows, p = 50, n.strong, n.weak.ind, n.weak.cor, c = 4, co
     }
   }
   
+  # inclusion of predictor in model
   included.forward = NULL
   included.lasso = NULL
   for (i in 1:p) {
@@ -288,9 +290,14 @@ model_fit = function(n.rows, p = 50, n.strong, n.weak.ind, n.weak.cor, c = 4, co
   ))
 }
 
-N = 1000
+N = 10
+n.strong = 8
+n.weak.ind = 5
+n.weak.cor = 7
+n.true = sum(n.strong, n.weak.cor, n.weak.ind)
+
 set.seed(2020)
-models = lapply(1:10, function(i){
+models = lapply(1:N, function(i){
   model_fit(n.rows = 1000, 
             p = 50,
             n.strong = 8,
@@ -301,17 +308,54 @@ models = lapply(1:10, function(i){
 })
 
 
-truth.df = do.call(rbind, lapply(models, `[[`, 1)) # models[[1]][[1]]
-forward.df = do.call(rbind, lapply(models, `[[`, 2))
-lasso.df = do.call(rbind, lapply(models, `[[`, 3))
+truth.df = lapply(models, `[[`, 1)
+forward = lapply(models, `[[`, 2)
+lasso = lapply(models, `[[`, 3)
 
-forward.prob = colMeans(forward.df)
-lasso.prob = colMeans(lasso.df)
 
-n.nonnull = sum(truth.df)
-null.index = (n.nonnull + 1):(p - n.nonnull)
-# Type I error
-forward.t1 = mean(forward.prob[null.index])
+## Average percentage of true predictors chosen by each model
+forward.true = do.call(rbind,
+        lapply(1:N, function(i){
+          ind = which(truth.df[[i]] == 1) # index of which parameters are true
+          forward.nonnull = forward[[i]][ind] # did the forward method select them?
+          
+          return(forward.nonnull)
+        })
+)
+mean(rowSums(forward.true)) / n.true
+
+lasso.true = do.call(rbind,
+        lapply(1:N, function(i){
+          ind = which(truth.df[[i]] == 1) # index of which parameters are true
+          lasso.nonnull = lasso[[i]][ind] # did the lasso method select them?
+          
+          return(lasso.nonnull)
+        })
+)
+mean(rowSums(lasso.true)) / n.true
+
+## Average percentage of true predictors chosen by each model
+forward.false = do.call(rbind,
+        lapply(1:N, function(i){
+          ind = which(truth.df[[i]] == 0) # index of which parameters are null
+          forward.nonnull = forward[[i]][ind] # did the forward method select them?
+          
+          return(forward.nonnull)
+        })
+)
+mean(rowSums(forward.false)) / n.true
+
+lasso.false = do.call(rbind,
+        lapply(1:N, function(i){
+          ind = which(truth.df[[i]] == 0) # index of which parameters are null
+          lasso.nonnull = lasso[[i]][ind] # did the lasso method select them?
+          
+          return(lasso.nonnull)
+        })
+)
+mean(rowSums(lasso.false)) / n.true
+
+
 
 ```
 
