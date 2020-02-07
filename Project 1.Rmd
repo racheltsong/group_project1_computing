@@ -67,20 +67,23 @@ sigma = 1
 set.seed(1)
 cor.ind = sample(2:49, n.weak.cor)
 #correlations = runif(n = n.weak.cor, 0.1, 1) # generate 10 non-zero correlations
-cor.matrix[1, cor.ind] = cor.matrix[cor.ind, 1] = 0.4
+
+b.strong.index = sample(seq(1, p, 1)[-cor.ind], size = n.strong) # randomly designate strong predictors
+b.weak.index = sample(seq(1, p, 1)[-b.strong.index], size = n.weak.cor + n.weak.ind)
+
+cor.matrix[b.strong.index, b.weak.index] = cor.matrix[b.weak.index, b.strong.index] = 0.4
 
 # generate data from multivariate normal with specified covariance structure
 set.seed(1)
 X = MASS::mvrnorm(n = n,
                   mu = rep(0, p),
                   Sigma = sigma*cor.matrix,
-                  tol = 0.3)
+                  tol = 0.9)
 
 # set conditions for strong vs. weak predictors
 condition = c*sqrt(log(p)/n)
 
-b.strong.index = sample(seq(1, p, 1)[-cor.ind], size = n.strong) # randomly designate strong predictors
-b.weak.index = sample(seq(1, p, 1)[-b.strong.index], size = n.weak.cor + n.weak.ind)
+
 
 # generate strong coefficients
 strong <- NULL
