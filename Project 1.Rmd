@@ -284,27 +284,39 @@ metrics = function(models, p = 50, n.strong, n.weak.ind, n.weak.cor){
 ```{r simulation}
 N = 10
 n.strong = 8
-n.weak.ind = 5
-n.weak.cor = 7
+n.weak = seq(2, 10, 2)
 n.true = sum(n.strong, n.weak.cor, n.weak.ind)
 
 set.seed(2020)
-models = lapply(1:N, function(i){
+models.manyweak = lapply(1:N, function(i){
   model_fit(n.rows = 1000, 
             p = 50,
             n.strong = 8,
-            n.weak.ind = 5,
-            n.weak.cor = 7,
+            n.weak.ind = 6,
+            n.weak.cor = 6,
             c = 4,
             corr = 0.4)
 })
-
-
-metrics = metrics(models = models,
+metrics.manyweak = metrics(models = models,
                   p = 50,
                   n.strong = 8,
-                  n.weak.ind = 5,
-                  n.weak.cor = 7)
+                  n.weak.ind = 6,
+                  n.weak.cor = 6)
+
+models.fewweak = lapply(1:N, function(i){
+  model_fit(n.rows = 1000, 
+            p = 50,
+            n.strong = 8,
+            n.weak.ind = 1,
+            n.weak.cor = 1,
+            c = 4,
+            corr = 0.4)
+})
+metrics.fewweak = metrics(models = models,
+                  p = 50,
+                  n.strong = 8,
+                  n.weak.ind = 1,
+                  n.weak.cor = 1)
 # 
 # mse.df = metrics$MSE.df
 # plot(mse.df[,3], mse.df[,1])
