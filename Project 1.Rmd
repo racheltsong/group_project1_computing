@@ -143,18 +143,6 @@ lasso.varnumber = as.numeric(lasso.varnumber)
 ```
 
 ```{r metrics}
-## Percentage of strong and weak predictors selected
-# weak predictors
-sum(b.weak.index %in% forward.varnumber) / (n.weak.cor + n.weak.ind) # forward
-sum(b.weak.index %in% lasso.varnumber) / (n.weak.cor + n.weak.ind) # lasso
-
-# strong predictors
-sum(b.strong.index %in% forward.varnumber) / n.strong # forward
-sum(b.strong.index %in% lasso.varnumber) / n.strong # lasso
-
-(sum(b.strong.index %in% forward.varnumber) + sum(b.weak.index %in% forward.varnumber)) / (p - n.null)
-
-## MSE
 
 ## Type I error - probability of selecting 
 
@@ -173,12 +161,6 @@ for (i in 1:p) {
   included.forward[i] = (i %in% forward.varnumber)
   included.lasso[i] = (i %in% lasso.varnumber)
 }
-
-
-
-## Power - probability of selecting a non-null 
-## Bias - MSE of beta hats
-
 
 
 ```
@@ -223,11 +205,11 @@ model_fit = function(n.rows, p = 50, n.strong, n.weak.ind, n.weak.cor, c = 4, co
   
   # generate weak (non-zero) coefficients
   weak <- NULL
-  repeat{
+  repeat {
     ran = abs(rnorm(1))
-    if(ran <= condition && ran > 0)
+    if (ran <= condition && ran > 0)
       weak = c(weak, ran)
-    if(length(weak) == n.weak.cor + n.weak.ind)
+    if (length(weak) == n.weak.cor + n.weak.ind)
       break
   }
   
@@ -284,12 +266,137 @@ model_fit = function(n.rows, p = 50, n.strong, n.weak.ind, n.weak.cor, c = 4, co
   
   
   return(list(
-    predictor.designation,
-    included.forward,
-    included.lasso
+    predictor.designation = predictor.designation,
+    included.forward = included.forward,
+    included.lasso = included.lasso,
+    b.true = b.true,
+    b.forward = params.forward,
+    b.lasso = params.lasso,
+    weak = b.weak.index
   ))
 }
 
+
+
+metrics = function(models, p = 50, n.strong, n.weak.ind, n.weak.cor){
+  truth.df = lapply(models, `[[`, 1)
+  forward = lapply(models, `[[`, 2)
+  lasso = lapply(models, `[[`, 3)
+  beta.true = lapply(models, `[[`, 4)
+  beta.forward = lapply(models, `[[`, 5)
+  beta.lasso = lapply(models, `[[`, 6)
+  weak.preds = lapply(models, `[[`, 7)
+  
+  
+  ## Average percentage of true predictors chosen by each model
+  forward.true = do.call(rbind,
+                         lapply(1:N, function(i){
+                           ind = which(truth.df[[i]] == 1) # index of which parameters are true
+                           forward.nonnull = forward[[i]][ind] # did the forward method select them?
+                           
+                           return(forward.nonnull)
+                         })
+  )
+  forward.pcttrue = mean(rowSums(forward.true)) / n.true
+  
+  lasso.true = do.call(rbind,
+                       lapply(1:N, function(i){
+                         ind = which(truth.df[[i]] == 1) # index of which parameters are true
+                         lasso.nonnull = lasso[[i]][ind] # did the lasso method select them?
+                         
+                         return(lasso.nonnull)
+                       })
+  )
+  lasso.pcttrue = mean(rowSums(lasso.true)) / n.true
+  
+  ## Average percentage of true predictors chosen by each model
+  forward.false = do.call(rbind,
+                          lapply(1:N, function(i){
+                            ind = which(truth.df[[i]] == 0) # index of which parameters are null
+                            forward.nonnull = forward[[i]][ind] # did the forward method select them?
+                            
+                            return(forward.nonnull)
+                          })
+  )
+  forward.pctnull = mean(rowSums(forward.false)) / n.true
+  
+  lasso.false = do.call(rbind,
+                        lapply(1:N, function(i){
+                          ind = which(truth.df[[i]] == 0) # index of which parameters are null
+                          lasso.nonnull = lasso[[i]][ind] # did the lasso method select them?
+                          
+                          return(lasso.nonnull)
+                        })
+  )
+  lasso.pctnull = mean(rowSums(lasso.false)) / n.true
+  
+
+  
+  
+  ### percentage of weak predictors
+  forward.weak = do.call(rbind,
+                          lapply(1:N, function(i){
+                            ind = weak.preds[[i]] # index of which parameters are null
+                            forward.nonnull = forward[[i]][ind] # did the forward method select them?
+                            
+                            return(forward.nonnull)
+                          })
+  )
+  forward.pctweak = rowSums(forward.weak) / (n.weak.cor + n.weak.ind)
+  
+  lasso.weak = do.call(rbind,
+                        lapply(1:N, function(i){
+                          ind = weak.preds[[i]]  # index of which parameters are null
+                          lasso.nonnull = lasso[[i]][ind] # did the lasso method select them?
+                          
+                          return(lasso.nonnull)
+                        })
+  )
+  lasso.pctweak = rowSums(lasso.weak) / (n.weak.cor + n.weak.ind)
+  
+  
+  
+  MSE.df = do.call(rbind, lapply(1:N, function(i){
+    params.forward = beta.forward[[i]]
+    params.lasso = beta.lasso[[i]]
+    b.true = beta.true[[i]]
+    
+    # get beta estimates from each model
+    names(params.forward) = as.numeric(gsub("X", "", names(params.forward)))
+    forward.betas = data.frame(X = as.numeric(names(params.forward)),
+                               b.forward = params.forward)
+    names(params.lasso) = as.numeric(gsub("V", "", names(params.lasso)))
+    lasso.betas = data.frame(X = as.numeric(names(params.lasso)),
+                             b.lasso = params.lasso)
+    
+    # calculated MSE across betas for each model
+    beta.estimates = data.frame(X = 1:p,
+                                b.true = b.true) %>% # true betas
+      left_join(forward.betas, by = "X") %>% # forward selection
+      left_join(lasso.betas, by = "X") %>% # lasso 
+      mutate_all(funs(replace_na(., 0))) %>% # let missing params be 0
+      mutate(MSE.forward = (b.forward - b.true)^2, # calculate MSE of each beta
+             MSE.lasso = (b.lasso - b.true)^2) %>%
+      summarise(avg.MSE.forward = mean(MSE.forward, na.rm = TRUE), # average MSE across betas
+                avg.MSE.lasso = mean(MSE.lasso, na.rm = TRUE)) %>%
+      unlist
+    
+    return(beta.estimates)
+  }) 
+  ) %>%
+    cbind(., forward.pctweak) %>%
+    cbind(., lasso.pctweak)
+  
+  return(list(
+    pcttrue = c(forward = forward.pcttrue, lasso = lasso.pcttrue),
+    pctnull = c(forward = forward.pctnull, lasso = lasso.pctnull),
+    MSE.df = MSE.df
+  ))
+}
+```
+
+
+```{r simulation}
 N = 10
 n.strong = 8
 n.weak.ind = 5
@@ -308,54 +415,14 @@ models = lapply(1:N, function(i){
 })
 
 
-truth.df = lapply(models, `[[`, 1)
-forward = lapply(models, `[[`, 2)
-lasso = lapply(models, `[[`, 3)
-
-
-## Average percentage of true predictors chosen by each model
-forward.true = do.call(rbind,
-        lapply(1:N, function(i){
-          ind = which(truth.df[[i]] == 1) # index of which parameters are true
-          forward.nonnull = forward[[i]][ind] # did the forward method select them?
-          
-          return(forward.nonnull)
-        })
-)
-mean(rowSums(forward.true)) / n.true
-
-lasso.true = do.call(rbind,
-        lapply(1:N, function(i){
-          ind = which(truth.df[[i]] == 1) # index of which parameters are true
-          lasso.nonnull = lasso[[i]][ind] # did the lasso method select them?
-          
-          return(lasso.nonnull)
-        })
-)
-mean(rowSums(lasso.true)) / n.true
-
-## Average percentage of true predictors chosen by each model
-forward.false = do.call(rbind,
-        lapply(1:N, function(i){
-          ind = which(truth.df[[i]] == 0) # index of which parameters are null
-          forward.nonnull = forward[[i]][ind] # did the forward method select them?
-          
-          return(forward.nonnull)
-        })
-)
-mean(rowSums(forward.false)) / n.true
-
-lasso.false = do.call(rbind,
-        lapply(1:N, function(i){
-          ind = which(truth.df[[i]] == 0) # index of which parameters are null
-          lasso.nonnull = lasso[[i]][ind] # did the lasso method select them?
-          
-          return(lasso.nonnull)
-        })
-)
-mean(rowSums(lasso.false)) / n.true
-
-
+metrics = metrics(models = models,
+                  p = 50,
+                  n.strong = 8,
+                  n.weak.ind = 5,
+                  n.weak.cor = 7)
+# 
+# mse.df = metrics$MSE.df
+# plot(mse.df[,3], mse.df[,1])
 
 ```
 
