@@ -63,7 +63,7 @@ n.null = p - sum(n.strong, n.weak.ind, n.weak.cor)
   b.cor.index = sample(1:p, n.weak.cor) # 1:n.weak.cor #
   #correlations = runif(n = n.weak.cor, 0.1, 1) # generate 10 non-zero correlations
   
-  b.strong.index = sample(seq(1, p, 1)[-cor.index], size = n.strong) #(1:n.strong) # # randomly designate strong predictors
+  b.strong.index = sample(seq(1, p, 1)[-b.cor.index], size = n.strong) #(1:n.strong) # # randomly designate strong predictors
   b.ind.index = sample(seq(1, p, 1)[-c(b.strong.index,b.cor.index)], size = n.weak.ind) # (n.strong) + (1:(n.weak.ind + n.weak.cor)) #
   b.null.index = seq(1, p, 1)[-c(b.strong.index, b.cor.index,b.ind.index)]
   b.weak.index = c(b.cor.index,b.ind.index)
@@ -287,7 +287,7 @@ metrics = function(models, p = 50, n.strong, n.weak.ind, n.weak.cor){
 N = 10
 n.strong = 8
 n.weak = seq(2, 10, 2)
-n.true = sum(n.strong, n.weak.cor, n.weak.ind)
+#n.true = sum(n.strong, n.weak.cor, n.weak.ind)
 
 set.seed(2020)
 models.manyweak = lapply(1:N, function(i){
