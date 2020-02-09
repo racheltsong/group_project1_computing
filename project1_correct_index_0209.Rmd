@@ -10,6 +10,7 @@ require(quantreg)
 require(glmnet)
 require(MASS)
 require(pROC)
+library(tidyverse)
 
 set.seed(2019)
 ```
@@ -55,6 +56,13 @@ $$S_3=\{j: 0<|\beta_j|\le c\sqrt{log (p) / n},\mbox{ some } c>0, \mbox{corr}(X_j
 ```{r function_wrapper}
 model_fit = function(n.rows, p = 50, n.strong, n.weak.ind, n.weak.cor, c = 4, corr = 0.4) {
 
+#n.rows = 1000
+#p = 50 
+#n.strong = 8
+#n.weak.ind = 6
+#n.weak.cor = 6
+#c = 4
+#corr = 0.4
 n.null = p - sum(n.strong, n.weak.ind, n.weak.cor)
   
   # specify correlation matrix
@@ -286,8 +294,9 @@ metrics = function(models, p = 50, n.strong, n.weak.ind, n.weak.cor){
 ```{r simulation}
 N = 10
 n.strong = 8
-n.weak = seq(2, 10, 2)
-#n.true = sum(n.strong, n.weak.cor, n.weak.ind)
+n.weak.ind = 6
+n.weak.cor = 6
+n.true = sum(n.strong, n.weak.cor, n.weak.ind)
 
 set.seed(2020)
 models.manyweak = lapply(1:N, function(i){
@@ -300,7 +309,7 @@ models.manyweak = lapply(1:N, function(i){
             corr = 0.4)
 })
 
-metrics.manyweak = metrics(models = models,
+metrics.manyweak = metrics(models = models.manyweak,
                   p = 50,
                   n.strong = 8,
                   n.weak.ind = 6,
