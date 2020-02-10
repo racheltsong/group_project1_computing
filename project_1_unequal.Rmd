@@ -1,0 +1,481 @@
+---
+title: "Group Project 1"
+output: pdf_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(survival)
+require(quantreg)
+require(glmnet)
+require(MASS)
+require(pROC)
+library(tidyverse)
+set.seed(2019)
+```
+
+
+# Project 3: Design a simulation study to compare variable selection methods
+
+When the number of candidate predictors in a linear model is large, variable selection is a common practice to find an optimal model that balances between model fitness and model complexity. 
+
+
+\begin{description}
+\item[Step-wise forward method:] Starting with the empty model, and iteratively adds the variables that best improves the model fit. That is often done by sequentially adding predictors with the largest reduction in AIC. For linear models,
+$$AIC = n\ln(\sum_{i=1}^n (y_i - \widehat{y}_i)^2/n) + 2p,$$ where $\widehat{y}_i$ is the fitted values from a model, and $p$ is the dimension of the model (i.e.,number of predictors plus 1).
+
+
+
+\item[Automated LASSO regression] LASSO is another   popular method for variable selection. It estimates the model parameters by optimizing a penalized loss function:
+$$\min_\beta \frac{1}{2n} \sum_{i=1}^n (y_i - x_i \beta )^2 + \lambda \lVert \sum_{k=1}^p|\beta_k|$$
+where $\lambda$ is a tunning parameter. Cross-validation (CV) is the most common selection criteria for LASSO.
+\end{description} 
+
+
+
+
+
+
+\paragraph{Your tasks:}  
+
+
+In modern applications with high-dimensional covariates, traditional variable selection methods often struggle with the presence of "weak" predictors. Design a simulation study to investigate and illustrate (1) how well each of the two methods in identifying weak and strong predictors, and (1) how missing  "weak" predictors impacts the parameter estimations.
+
+To do so, you need to simulate data with a combination of ``strong'',``weak-but-correlated'' and ``weak-and-independent'' predictors. Their definition can be found in the following. 
+Definition of strong signals --- 
+$$S_1=\{j:|\beta_j|>c\sqrt{log (p) / n},\mbox{ some } c>0,  1\le j \le p\}$$
+Definition of weak-but-correlated signals  ---
+$$S_2=\{j: 0<|\beta_j|\le c\sqrt{log (p) / n},\mbox{ some } c>0, \mbox{corr}(X_j, X_j')\ne 0, \mbox{for some } j'\in S_1,  1\le j \le p\}$$
+Definition of weak-and-independent signals  ---
+$$S_3=\{j: 0<|\beta_j|\le c\sqrt{log (p) / n},\mbox{ some } c>0, \mbox{corr}(X_j, X_j')= 0, \mbox{for all } j'\in S_1,  1\le j \le p\}$$
+\paragraph{R codes for forwarding selection and LASSO }
+```{r function_wrapper}
+model_fit = function(n.rows, p = 50, n.strong, n.weak.ind, n.weak.cor, c = 4, corr = 0.4) {
+#n.rows = 1000
+#p = 50 
+#n.strong = 8
+#n.weak.ind = 6
+#n.weak.cor = 6
+#c = 4
+#corr = 0.4
+n.null = p - sum(n.strong, n.weak.ind, n.weak.cor)
+  
+  # specify correlation matrix
+  cor.matrix = diag(p)
+  sigma = 1
+  b.cor.index = sample(1:p, n.weak.cor) # 1:n.weak.cor #
+  #correlations = runif(n = n.weak.cor, 0.1, 1) # generate 10 non-zero correlations
+  
+  b.strong.index = sample(seq(1, p, 1)[-b.cor.index], size = n.strong) #(1:n.strong) # # randomly designate strong predictors
+  b.ind.index = sample(seq(1, p, 1)[-c(b.strong.index,b.cor.index)], size = n.weak.ind) # (n.strong) + (1:(n.weak.ind + n.weak.cor)) #
+  b.null.index = seq(1, p, 1)[-c(b.strong.index, b.cor.index,b.ind.index)]
+  b.weak.index = c(b.cor.index,b.ind.index)
+  
+  cor.matrix[b.strong.index, b.cor.index] = cor.matrix[b.cor.index, b.strong.index] = corr
+  
+  # generate data from multivariate normal with specified covariance structure
+  X = MASS::mvrnorm(n = n.rows,
+                    mu = rep(0, p),
+                    Sigma = sigma*cor.matrix,
+                    tol = 0.9)
+  
+  # set conditions for strong vs. weak predictors
+  condition = c*sqrt(log(p)/n.rows)
+  # generate strong coefficients
+  strong <- NULL
+  repeat {
+    ran = abs(rnorm(1))
+    if (ran > condition) {
+      strong = c(strong, ran)
+      }
+    if (length(strong) == n.strong){
+      break }
+  }
+  
+  # generate weak (non-zero) coefficients
+  weak <- NULL
+  repeat {
+    ran = abs(rnorm(1))
+    if (ran <= condition && ran > 0)
+      weak = c(weak, ran)
+    if (length(weak) == n.weak.cor + n.weak.ind)
+      break
+  }
+  
+  # list of all coefficients
+  b.true = rep(0, p)
+  b.true[b.strong.index] = strong
+  b.true[b.weak.index] = weak
+  
+  # generate outcome
+  Y <- 1 + X %*% b.true + rnorm(n.rows)
+  df <- data.frame(cbind(X, Y))
+  
+  names(df)[p + 1] <- "y"
+  
+  
+  ##### MODEL FITTING
+  # Forward Selection
+  fit.forward <- step(object = lm(y ~ 1, data = df),
+                      scope = formula(lm(y ~ ., data = df)), 
+                      direction = "forward", 
+                      k = 2, 
+                      trace = 0) # AIC
+  params.forward = fit.forward$coefficients[-1]
+  forward.varnumber = gsub(pattern = "X", replacement = "", x = names(params.forward))
+  forward.varnumber = sort(as.numeric(forward.varnumber))
+  
+  # LASSO
+  fit.lasso <- cv.glmnet(X, Y, nfolds = 10, type.measure = "mse") # 5-fold CV using mean squared error
+  param.best <- fit.lasso$glmnet.fit$beta[, fit.lasso$lambda == fit.lasso$lambda.1se] # one standard-error rule
+  params.lasso = param.best[param.best != 0]
+  lasso.varnumber = gsub(pattern = "V", replacement = "", x = names(params.lasso))
+  lasso.varnumber = as.numeric(lasso.varnumber)
+  
+  
+  ##### INFORMATION EXTRACTION
+  # truth (null or nonnull predictor)
+  predictor.designation = NULL
+  for (i in 1:p) {
+    if (i %in% c(b.strong.index, b.weak.index)) {
+      predictor.designation[i] = 1
+    } else {
+      predictor.designation[i] = 0
+    }
+  }
+  
+  # inclusion of predictor in model
+  included.forward = NULL
+  included.lasso = NULL
+  for (i in 1:p) {
+    included.forward[i] = (i %in% forward.varnumber)
+    included.lasso[i] = (i %in% lasso.varnumber)
+  }
+  
+  
+  return(list(
+    predictor.designation = predictor.designation,
+    included.forward = included.forward,
+    included.lasso = included.lasso,
+    b.true = b.true,
+    b.forward = params.forward,
+    b.lasso = params.lasso,
+    weak = b.weak.index
+  ))
+}
+metrics = function(models, p = 50, n.strong, n.weak.ind, n.weak.cor){
+  truth.df = lapply(models, `[[`, 1)
+  forward = lapply(models, `[[`, 2)
+  lasso = lapply(models, `[[`, 3)
+  beta.true = lapply(models, `[[`, 4)
+  beta.forward = lapply(models, `[[`, 5)
+  beta.lasso = lapply(models, `[[`, 6)
+  weak.preds = lapply(models, `[[`, 7)
+  
+  
+  ## Average percentage of true predictors chosen by each model
+  forward.true = do.call(rbind,
+                         lapply(1:N, function(i){
+                           ind = which(truth.df[[i]] == 1) # index of which parameters are true
+                           forward.nonnull = forward[[i]][ind] # did the forward method select them?
+                           
+                           return(forward.nonnull)
+                         })
+  )
+  forward.pcttrue = mean(rowSums(forward.true)) / n.true
+  
+  lasso.true = do.call(rbind,
+                       lapply(1:N, function(i){
+                         ind = which(truth.df[[i]] == 1) # index of which parameters are true
+                         lasso.nonnull = lasso[[i]][ind] # did the lasso method select them?
+                         
+                         return(lasso.nonnull)
+                       })
+  )
+  lasso.pcttrue = mean(rowSums(lasso.true)) / n.true
+  
+  ## Average percentage of true predictors chosen by each model
+  forward.false = do.call(rbind,
+                          lapply(1:N, function(i){
+                            ind = which(truth.df[[i]] == 0) # index of which parameters are null
+                            forward.nonnull = forward[[i]][ind] # did the forward method select them?
+                            
+                            return(forward.nonnull)
+                          })
+  )
+  forward.pctnull = mean(rowSums(forward.false)) / n.true
+  
+  lasso.false = do.call(rbind,
+                        lapply(1:N, function(i){
+                          ind = which(truth.df[[i]] == 0) # index of which parameters are null
+                          lasso.nonnull = lasso[[i]][ind] # did the lasso method select them?
+                          
+                          return(lasso.nonnull)
+                        })
+  )
+  lasso.pctnull = mean(rowSums(lasso.false)) / n.true
+  
+  
+  
+  ### percentage of weak predictors
+  forward.weak = do.call(rbind,
+                          lapply(1:N, function(i){
+                            ind = weak.preds[[i]] # index of which parameters are null
+                            forward.nonnull = forward[[i]][ind] # did the forward method select them?
+                            
+                            return(forward.nonnull)
+                          })
+  )
+  forward.pctweak = rowSums(forward.weak) / (n.weak.cor + n.weak.ind)
+  
+  lasso.weak = do.call(rbind,
+                        lapply(1:N, function(i){
+                          ind = weak.preds[[i]]  # index of which parameters are null
+                          lasso.nonnull = lasso[[i]][ind] # did the lasso method select them?
+                          
+                          return(lasso.nonnull)
+                        })
+  )
+  lasso.pctweak = rowSums(lasso.weak) / (n.weak.cor + n.weak.ind)
+  
+  
+  
+  MSE.df = do.call(rbind, lapply(1:N, function(i){
+    params.forward = beta.forward[[i]]
+    params.lasso = beta.lasso[[i]]
+    b.true = beta.true[[i]]
+    
+    # get beta estimates from each model
+    names(params.forward) = as.numeric(gsub("X", "", names(params.forward)))
+    forward.betas = data.frame(X = as.numeric(names(params.forward)),
+                               b.forward = params.forward)
+    names(params.lasso) = as.numeric(gsub("V", "", names(params.lasso)))
+    lasso.betas = data.frame(X = as.numeric(names(params.lasso)),
+                             b.lasso = params.lasso)
+    
+    # calculated MSE across betas for each model
+    beta.estimates = data.frame(X = 1:p,
+                                b.true = b.true) %>% # true betas
+      left_join(forward.betas, by = "X") %>% # forward selection
+      left_join(lasso.betas, by = "X") %>% # lasso 
+      mutate_all(funs(replace_na(., 0))) %>% # let missing params be 0
+      mutate(MSE.forward = (b.forward - b.true)^2, # calculate MSE of each beta
+             MSE.lasso = (b.lasso - b.true)^2) %>%
+      summarise(avg.MSE.forward = mean(MSE.forward, na.rm = TRUE), # average MSE across betas
+                avg.MSE.lasso = mean(MSE.lasso, na.rm = TRUE)) %>%
+      unlist
+    
+    return(beta.estimates)
+  }) 
+  ) %>%
+    cbind(., forward.pctweak) %>%
+    cbind(., lasso.pctweak)
+  
+  return(list(
+    pcttrue = c(forward = forward.pcttrue, lasso = lasso.pcttrue),
+    pctnull = c(forward = forward.pctnull, lasso = lasso.pctnull),
+    MSE.df = MSE.df
+  ))
+}
+```
+
+
+# n.weak.ind != n.weak.cor
+```{r simulation}
+N = 1000
+n.strong = 8
+n.weak.ind = 4
+n.weak.cor = 16
+n.true = sum(n.strong, n.weak.cor, n.weak.ind)
+set.seed(2020)
+
+models.unequ.weak1.4 = lapply(1:N, function(i){
+  model_fit(n.rows = 1000, 
+            p = 50,
+            n.strong = 8,
+            n.weak.ind = 4,
+            n.weak.cor = 16,
+            c = 4,
+            corr = 0.4)
+})
+metrics.unequ.weak1.4 = metrics(models = models.unequ.weak1.4,
+                  p = 50,
+                  n.strong = 8,
+                  n.weak.ind = 4,
+                  n.weak.cor = 16)
+
+N = 1000
+n.strong = 8
+n.weak.ind = 16
+n.weak.cor = 4
+n.true = sum(n.strong, n.weak.cor, n.weak.ind)
+set.seed(2020)
+
+models.unequ.weak4.1 = lapply(1:N, function(i){
+  model_fit(n.rows = 1000, 
+            p = 50,
+            n.strong = 8,
+            n.weak.ind = 16,
+            n.weak.cor = 4,
+            c = 4,
+            corr = 0.4)
+})
+metrics.unequ.weak4.1 = metrics(models = models.unequ.weak4.1,
+                  p = 50,
+                  n.strong = 8,
+                  n.weak.ind = 16,
+                  n.weak.cor = 4)
+
+N = 1000
+n.strong = 8
+n.weak.ind = 8
+n.weak.cor = 12
+n.true = sum(n.strong, n.weak.cor, n.weak.ind)
+set.seed(2020)
+
+models.unequ.weak2.3 = lapply(1:N, function(i){
+  model_fit(n.rows = 1000, 
+            p = 50,
+            n.strong = 8,
+            n.weak.ind = 8,
+            n.weak.cor = 12,
+            c = 4,
+            corr = 0.4)
+})
+metrics.unequ.weak2.3 = metrics(models = models.unequ.weak2.3,
+                  p = 50,
+                  n.strong = 8,
+                  n.weak.ind = 8,
+                  n.weak.cor = 12)
+
+N = 1000
+n.strong = 8
+n.weak.ind = 12
+n.weak.cor = 8
+n.true = sum(n.strong, n.weak.cor, n.weak.ind)
+set.seed(2020)
+
+models.unequ.weak3.2 = lapply(1:N, function(i){
+  model_fit(n.rows = 1000, 
+            p = 50,
+            n.strong = 8,
+            n.weak.ind = 12,
+            n.weak.cor = 8,
+            c = 4,
+            corr = 0.4)
+})
+metrics.unequ.weak3.2 = metrics(models = models.unequ.weak3.2,
+                  p = 50,
+                  n.strong = 8,
+                  n.weak.ind = 12,
+                  n.weak.cor = 8)
+#save.image(file="unequal.weak.RData")
+# 
+# mse.df = metrics$MSE.df
+# plot(mse.df[,3], mse.df[,1])
+```
+
+```{r}
+# data for boxplot (SSE)
+
+SSE.unequ.weak1.4 = metrics.unequ.weak1.4[[3]][,c(1:2)] 
+SSE.unequ.weak4.1 = metrics.unequ.weak4.1[[3]][,c(1:2)] 
+SSE.unequ.weak2.3 = metrics.unequ.weak2.3[[3]][,c(1:2)] 
+SSE.unequ.weak3.2 = metrics.unequ.weak3.2[[3]][,c(1:2)] 
+
+sse = rbind(
+cbind(SSE.unequ.weak1.4,group = c(rep(0.2,1000))),
+cbind(SSE.unequ.weak4.1,group = c(rep(0.8,1000))),
+cbind(SSE.unequ.weak2.3,group = c(rep(0.4,1000))),
+cbind(SSE.unequ.weak3.2,group = c(rep(0.6,1000)))
+)
+
+
+```
+
+```{r}
+# boxplot
+##### Maybe not be put in the presentation!!!!!!!
+sse.df = 
+sse %>% as.data.frame() %>%
+  pivot_longer(
+    cols = avg.MSE.forward:avg.MSE.lasso,
+    names_to = "model",
+    values_to = "mse",
+    names_prefix = "avg.MSE."
+  ) %>% 
+  mutate(
+    group = as.factor(group)
+  ) 
+
+box_sse = 
+  sse.df %>% 
+  ggplot(aes(x = group, y = mse, fill = model ))+
+  geom_boxplot()+
+  ylim(0,0.1)+
+  labs(x  = "Ratio of independent weak predictors over total weak predictors",
+       y  = "SSE",
+       title = "Boxplot of average SSE for differnt ratio of independent weak parameters\n('weak-correlated' ≠ 'weak-independent')"
+       )+
+  theme(plot.title = element_text(hjust = 0.5))
+  
+  
+box_sse
+```
+
+```{r}
+# MSE plot
+
+mse_number_weak_plot =
+sse.df %>% 
+  group_by(group,model) %>% 
+  summarise(
+    mse = mean(mse)
+  ) %>%
+  ungroup(group,model) %>% 
+  ggplot(aes(x = group,y = mse,color = model,group =model))+
+    geom_line()+
+  geom_point()+
+  labs(x  = "Ratio of independent weak predictors over total weak predictors",
+       y  = "MSE",
+       title = "Boxplot of average SSE for differnt ratio of independent weak parameters\n('weak-correlated' ≠ 'weak-independent')"
+       )+
+  theme(plot.title = element_text(hjust = 0.5))
+
+mse_number_weak_plot
+```
+
+
+```{r}
+res.list <- list(metrics.unequ.weak1.4,metrics.unequ.weak2.3,metrics.unequ.weak3.2,metrics.unequ.weak4.1)
+
+# percent of true 
+power.plot <- 
+  lapply(res.list, `[[`, 1) %>%
+  map_df(~as_tibble(.x) %>% mutate(model = c("forward","lasso"))) %>%
+  mutate(ratio = factor(rep(c(0.2,0.4,0.6,0.8),each = 2))) %>%  
+  ggplot(aes(x = ratio, y = value,color = model, group = model)) +
+  geom_point()+
+  geom_line() +
+  labs(x  = "Ratio of independent weak predictors over total weak predictors",
+       y  = "Power",
+       title = "Power for differnt ratio of independent weak parameters\n('weak-correlated' ≠ 'weak-independent')"
+       )+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+Erorr.plot <- 
+  lapply(res.list, `[[`, 2) %>%
+  map_df(~as_tibble(.x) %>%
+           mutate(model = c("forward","lasso"))
+         ) %>% 
+  mutate(ratio = factor(rep(c(0.2,0.4,0.6,0.8),each = 2))) %>% 
+  ggplot(aes(x = ratio, y = value,color = model, group = model)) +
+  geom_point()+
+  geom_line() +
+  labs( x = "Ratio of independent weak predictors over total weak predictors",
+        y = "Type I error" , 
+        title = "Type I erorr for differnt ratio of independent weak parameters\n('weak-correlated' ≠ 'weak-independent')")
+```
+
+
+
