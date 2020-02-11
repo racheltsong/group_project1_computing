@@ -1,0 +1,86 @@
+---
+title: "sim_corr"
+author: "xj2249"
+date: "2020/2/11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+theme_set(theme_minimal() +  theme(plot.title = element_text(hjust = 0.5))) 
+library(tidyverse)
+```
+
+```{r}
+N = 1000 
+
+corr0.2 <- metrics(models.corr02,
+                   p = 50,
+                  n.strong = 8,
+                  n.weak.ind = 4,
+                  n.weak.cor = 4)
+
+corr0.4 <- metrics(models.corr04,
+                   p = 50,
+                  n.strong = 8,
+                  n.weak.ind = 4,
+                  n.weak.cor = 4)
+
+corr0.6 <- metrics(models.corr06,
+                   p = 50,
+                  n.strong = 8,
+                  n.weak.ind = 4,
+                  n.weak.cor = 4)
+
+corr0.8 <- metrics(models.corr08,
+                   p = 50,
+                  n.strong = 8,
+                  n.weak.ind = 4,
+                  n.weak.cor = 4)
+
+res.list <- list(corr0.2,corr0.4,corr0.6,corr0.8)
+
+# percent of true 
+power.plot <- 
+  lapply(res.list, `[[`, 3) %>%
+  map_df(~as_tibble(.x) %>% mutate(model = c("forward","lasso"))) %>%
+  mutate(corr = factor(rep(c(0.2,0.4,0.6,0.8),each = 2))) %>%  
+  ggplot(aes(x = corr, y = value,color = model, group = model)) +
+  geom_point() +
+  geom_line() +
+  labs( x = "correlation",
+        y = "Power" , 
+        title = "Power under different correlation")
+
+
+Erorr.plot <- 
+  lapply(res.list, `[[`, 4) %>%
+  map_df(~as_tibble(.x) %>%
+           mutate(model = c("forward","lasso"))
+         ) %>% 
+  mutate(corr = factor(rep(c(0.2,0.4,0.6,0.8),each = 2))) %>% 
+  ggplot(aes(x = corr, y = value,color = model, group = model)) +
+  geom_point() +
+  geom_line() +
+  labs( x = "correlation",
+        y = "Erorr" , 
+        title = "Type I erorr under different correlation")
+
+# MSE
+mse.plot <-
+  lapply(res.list, `[[`, 5) %>% 
+  map_df(as.data.frame) %>% 
+  mutate(corr = factor(rep(c(0.2,0.4,0.6,0.8),each = 1000))) %>% 
+  group_by(corr) %>% 
+  summarise(avg.MSE.forward = mean(avg.MSE.forward),
+            avg.MSE.lasso = mean(avg.MSE.lasso)) %>%
+  ungroup() %>% 
+  pivot_longer(-corr,names_to = "model", values_to = "value", names_prefix = "avg.MSE.") %>% 
+  ggplot(aes(x = corr, y = value,color = model, group = model)) +
+  geom_point() +
+  geom_line() +
+  labs( x = "correlation",
+        y = "MSE" , 
+        title = "MSE under different correlation")
+```
+
