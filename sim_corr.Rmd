@@ -39,7 +39,10 @@ corr0.8 <- metrics(models.corr08,
                   n.weak.cor = 4)
 
 res.list <- list(corr0.2,corr0.4,corr0.6,corr0.8)
+```
 
+
+```{r}
 # percent of true 
 power.plot <- 
   lapply(res.list, `[[`, 3) %>%
@@ -52,7 +55,17 @@ power.plot <-
         y = "Power" , 
         title = "Power under different correlation")
 
+true.selected <-
+  lapply(res.list,`[[`,3) %>%
+  map_df(~as_tibble(.x) %>% mutate(model = c("forward","lasso"))) %>%
+  mutate(corr = factor(rep(c(0.2,0.4,0.6,0.8),each = 2)))
 
+null.selected <-
+  lapply(res.list,`[[`,4) %>%
+  map_df(~as_tibble(.x) %>% mutate(model = c("forward","lasso"))) %>%
+  mutate(corr = factor(rep(c(0.2,0.4,0.6,0.8),each = 2)))
+
+# Error
 Erorr.plot <- 
   lapply(res.list, `[[`, 4) %>%
   map_df(~as_tibble(.x) %>%
@@ -82,5 +95,34 @@ mse.plot <-
   labs( x = "correlation",
         y = "MSE" , 
         title = "MSE under different correlation")
+```
+
+
+```{r}
+model.size <-
+  lapply(res.list, `[[`, 1) %>% 
+  map_df(as_tibble) %>% 
+  mutate(corr = factor(rep(c(0.2,0.4,0.6,0.8),each = 2000)),
+         model = rep(rep(c("forward","lasso"),each = 1000),4)
+         ) %>% 
+  group_by(model,corr) %>% 
+  summarise(size = median(value))
+```
+
+
+```{r}
+weak.number <-
+  lapply(res.list, `[[`, 2) %>% 
+  map_df(as_tibble) %>% 
+  mutate(corr = factor(rep(c(0.2,0.4,0.6,0.8),each = 2000)),
+         model = rep(rep(c("forward","lasso"),each = 1000),4)
+         ) %>% 
+  group_by(model,corr) %>% 
+  summarise(selected.weak = mean(value/8))
+```
+
+```{r}
+
+
 ```
 
