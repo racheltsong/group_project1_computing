@@ -368,7 +368,210 @@ metrics.equ.weak10 = metrics(models = models.equ.weak10,
                   n.strong = 8,
                   n.weak.ind = 10,
                   n.weak.cor = 10)
+
+#save.image(file="equal.weak.RData")
 # 
 # mse.df = metrics$MSE.df
 # plot(mse.df[,3], mse.df[,1])
 ```
+
+
+```{r}
+# data for boxplot (SSE)
+SSE.equ.weak1 = metrics.equ.weak1[[3]][,c(1:2)] 
+SSE.equ.weak4 = metrics.equ.weak4[[3]][,c(1:2)] 
+SSE.equ.weak7 = metrics.equ.weak7[[3]][,c(1:2)] 
+SSE.equ.weak10 = metrics.equ.weak10[[3]][,c(1:2)] 
+
+sse = rbind(
+cbind(SSE.equ.weak1,group = c(rep(1,1000))),
+cbind(SSE.equ.weak4,group = c(rep(4,1000))),
+cbind(SSE.equ.weak7,group = c(rep(7,1000))),
+cbind(SSE.equ.weak10,group = c(rep(10,1000)))
+)
+
+```
+
+```{r}
+# boxplot
+sse.df = 
+sse %>% as.data.frame() %>%
+  pivot_longer(
+    cols = avg.MSE.forward:avg.MSE.lasso,
+    names_to = "model",
+    values_to = "mse",
+    names_prefix = "avg.MSE."
+  ) %>% 
+  mutate(
+    group = as.factor(2*group)
+  ) 
+
+box_sse = 
+  sse.df %>% 
+  ggplot(aes(x = group, y = mse, fill = model))+
+  geom_boxplot()+
+  ylim(0,0.3)+
+  labs(x  = "Total number of weak predictors ",
+       y  = "SSE",
+       title = "Boxplot of average SSE for differnt number of weak parameters\n('weak-correlated' = 'weak-independent')"
+       )+
+  theme(plot.title = element_text(hjust = 0.5))
+  
+  
+box_sse
+```
+
+```{r}
+# MSE plot
+
+mse_number_weak_plot =
+sse.df %>% 
+  group_by(group,model) %>% 
+  summarise(
+    mse = mean(mse)
+  ) %>%
+  ungroup(group,model) %>% 
+  ggplot(aes(x = group,y = mse,color = model,group =model))+
+    geom_line()+
+  geom_point()+
+  labs(x = "Total number of weak predictors ",
+       y = "MSE",
+       title = "MSE for differnt number of weak parameters \n('weak-correlated' = 'weak-independent')"
+       )+
+  theme(plot.title = element_text(hjust = 0.5))
+
+mse_number_weak_plot
+```
+
+
+```{r}
+# data for type I error and power
+SSE.equ.weak1 = metrics.equ.weak1[[3]]
+SSE.equ.weak4 = metrics.equ.weak4[[3]]
+SSE.equ.weak7 = metrics.equ.weak7[[3]] 
+SSE.equ.weak10 = metrics.equ.weak10[[3]] 
+
+sse = rbind(
+cbind(SSE.equ.weak1,group = c(rep(1,1000))),
+cbind(SSE.equ.weak4,group = c(rep(4,1000))),
+cbind(SSE.equ.weak7,group = c(rep(7,1000))),
+cbind(SSE.equ.weak10,group = c(rep(10,1000)))
+)
+
+
+sse.df = 
+sse %>% as.data.frame() %>%
+  pivot_longer(
+    cols = avg.MSE.forward:avg.MSE.lasso,
+    names_to = "model",
+    values_to = "mse",
+    names_prefix = "avg.MSE."
+  ) %>% 
+  mutate(
+    group = as.factor(2*group)
+  ) 
+```
+
+```{r}
+sse.dff = 
+sse %>% 
+  as.data.frame() %>% 
+  mutate(
+    loss_weak_forward = 
+      case_when(
+      forward.pctweak >= 0.1 & forward.pctweak < 0.2 ~ "0.1-0.2",
+      forward.pctweak >= 0.2 & forward.pctweak < 0.3 ~ "0.2-0.3",
+      forward.pctweak >= 0.3 & forward.pctweak < 0.4 ~ "0.3-0.4",
+      forward.pctweak >= 0.4 & forward.pctweak < 0.5 ~ "0.4-0.5",
+      forward.pctweak >= 0.5 & forward.pctweak < 0.6 ~ "0.5-0.6",
+      forward.pctweak >= 0.6 & forward.pctweak < 0.7 ~ "0.6-0.7",
+      forward.pctweak >= 0.7 & forward.pctweak < 0.8 ~ "0.7-0.8",
+      forward.pctweak >= 0.8 & forward.pctweak < 0.9 ~ "0.8-0.9",
+      forward.pctweak >= 0.9 & forward.pctweak <= 1.0 ~ "0.9-1.0"
+    ),
+    loss_weak_lasso = 
+      case_when(
+      lasso.pctweak >= 0.1 & lasso.pctweak < 0.2 ~ "0.1-0.2",
+      lasso.pctweak >= 0.2 & lasso.pctweak < 0.3 ~ "0.2-0.3",
+      lasso.pctweak >= 0.3 & lasso.pctweak < 0.4 ~ "0.3-0.4",
+      lasso.pctweak >= 0.4 & lasso.pctweak < 0.5 ~ "0.4-0.5",
+      lasso.pctweak >= 0.5 & lasso.pctweak < 0.6 ~ "0.5-0.6",
+      lasso.pctweak >= 0.6 & lasso.pctweak < 0.7 ~ "0.6-0.7",
+      lasso.pctweak >= 0.7 & lasso.pctweak < 0.8 ~ "0.7-0.8",
+      lasso.pctweak >= 0.8 & lasso.pctweak < 0.9 ~ "0.8-0.9",
+      lasso.pctweak >= 0.9 & lasso.pctweak <= 1.0 ~ "0.9-1.0"
+    )
+  ) %>% 
+  select(avg.MSE.forward,avg.MSE.lasso,loss_weak_forward,loss_weak_lasso) %>% 
+  pivot_longer(
+    cols = avg.MSE.forward:avg.MSE.lasso,
+    names_to = "model",
+    values_to = "mse",
+    names_prefix = "avg.MSE."
+  ) %>% 
+    pivot_longer(
+    cols = loss_weak_forward:loss_weak_lasso,
+    names_to = "loss_group",
+    values_to = "loss_ratio",
+    names_prefix = "loss_weak_"
+  ) %>% 
+  arrange(loss_ratio)
+
+
+mse_ratio_missing_plot = 
+sse.dff[c(which(sse.dff[[1]]==sse.dff[[3]])),] %>% 
+  select(-loss_group) %>% 
+  group_by(loss_ratio,model) %>% 
+  summarise(
+    mse = mean(mse)
+  ) %>% 
+  ungroup(loss_ratio,model) %>% 
+  ggplot(aes(x = loss_ratio, y = mse, color = model,group = model))+
+  geom_point()+
+  geom_line()+
+  labs(x = "Ratio of missing weak predictors",
+       y = "MSE",
+       title = "MSE for differnt ratio of missing weak parameters \n('weak-correlated' = 'weak-independent')"
+       )+
+  theme(plot.title = element_text(hjust = 0.5))
+
+mse_ratio_missing_plot
+ 
+```
+
+```{r}
+res.list <- list(metrics.equ.weak1,metrics.equ.weak4,metrics.equ.weak7,metrics.equ.weak10)
+
+# percent of true 
+power.plot <- 
+  lapply(res.list, `[[`, 1) %>%
+  map_df(~as_tibble(.x) %>% mutate(model = c("forward","lasso"))) %>%
+  mutate(number = factor(rep(c(2,8,14,20),each = 2))) %>%  
+  ggplot(aes(x = number, y = value,color = model, group = model)) +
+  geom_point()+
+  geom_line() +
+  labs(x = "Total number of weak predictors ",
+       y = "Power",
+       title = "Power for differnt number of weak parameters \n('weak-correlated' = 'weak-independent')"
+       )+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+Erorr.plot <- 
+  lapply(res.list, `[[`, 2) %>%
+  map_df(~as_tibble(.x) %>%
+           mutate(model = c("forward","lasso"))
+         ) %>% 
+  mutate(number = factor(rep(c(2,8,14,20),each = 2))) %>% 
+  ggplot(aes(x = number, y = value,color = model, group = model)) +
+  geom_point()+
+  geom_line() +
+  labs(x = "Total number of weak predictors ",
+       y = "Type I error",
+       title = "Type I error for differnt number of weak parameters \n('weak-correlated' = 'weak-independent')"
+       )+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
