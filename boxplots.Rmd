@@ -1,0 +1,59 @@
+---
+title: "Boxplots"
+author: "Rachel Tsong"
+date: "2/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+Load Rdata
+```{r}
+load("~/School documents/Spring 2020 Courses/Statistical Computing/group_project1_computing/sims_2weak.RData")
+load("~/School documents/Spring 2020 Courses/Statistical Computing/group_project1_computing/sim_8weak.RData")
+load("~/School documents/Spring 2020 Courses/Statistical Computing/group_project1_computing/sim_14weak.RData")
+load("~/School documents/Spring 2020 Courses/Statistical Computing/group_project1_computing/sim_20weak.RData")
+```
+
+Merge metrics dataframes
+```{r}
+met_2weak = as_tibble(metrics.fewweak$MSE.df) %>% 
+  mutate(simulation = "2 weak")
+met_8weak = as_tibble(metrics.8weak$MSE.df) %>% 
+  mutate(simulation = "8 weak")
+met_14weak = as_tibble(metrics.14weak$MSE.df) %>% 
+  mutate(simulation = "14 weak")
+met_20weak = as_tibble(metrics.20weak$MSE.df) %>% 
+  mutate(simulation = "20 weak")
+metrics = rbind(met_2weak, met_8weak, met_14weak, met_20weak) %>%
+  pivot_longer(cols = avg.MSE.forward:avg.MSE.lasso,
+               names_to = "selection_method",
+               values_to = "MSE") %>%
+  mutate(selection_method = str_replace(string = selection_method, 
+                                        pattern = "avg.MSE.",
+                                        replacement = ""))
+```
+
+Boxplot
+```{r}
+metrics %>% 
+  filter(simulation == "2 weak") %>%
+  ggplot(., aes(x = selection_method, y = MSE)) +
+  geom_boxplot() 
+metrics %>% 
+  filter(simulation != "2 weak") %>%
+  ggplot(., aes(x = selection_method, y = MSE)) +
+  geom_boxplot() + 
+  facet_grid(~simulation)
+
+```
+
+
+
+
+
+
+
