@@ -139,6 +139,7 @@ metrics = function(models, p = 50, n.strong, n.weak.ind, n.weak.cor){
     b.true = beta.true[[i]]
     strong.index = which(beta.true[i][[1]] > condition)
     weak.index = which(beta.true[i][[1]] <= condition & beta.true[i][[1]] > 0)
+    null.index = which(beta.true[i][[1]] == 0)
     
     # get beta estimates from each model
     names(params.forward) = as.numeric(gsub("X", "", names(params.forward)))
@@ -162,7 +163,9 @@ metrics = function(models, p = 50, n.strong, n.weak.ind, n.weak.cor){
                 avg.forward.strong = mean((b.forward[strong.index] - b.true[strong.index])^2, na.rm = TRUE),
                 avg.forward.weak = mean((b.forward[weak.index] - b.true[weak.index])^2, na.rm = TRUE),
                 avg.lasso.strong = mean((b.lasso[strong.index] - b.true[strong.index])^2, na.rm = TRUE),
-                avg.lasso.weak = mean((b.lasso[weak.index] - b.true[weak.index])^2, na.rm = TRUE)) %>%
+                avg.lasso.weak = mean((b.lasso[weak.index] - b.true[weak.index])^2, na.rm = TRUE),
+                avg.forward.null = mean((b.forward[null.index] - b.true[null.index])^2, na.rm = TRUE),
+                avg.lasso.null = mean((b.lasso[null.index] - b.true[null.index])^2, na.rm = TRUE)) %>%
       unlist
     
     return(beta.estimates)
@@ -208,7 +211,7 @@ metrics10 = metrics(models = models.equ.weak10,
 
 
 
-
+# df for model size
 model.size = rbind(
   matrix(data = metrics1$model.size, nrow = 2000, ncol = 1),
   matrix(data = metrics4$model.size, nrow = 2000, ncol = 1),
@@ -219,6 +222,7 @@ model.size = rbind(
   rename(model.size = "V1") %>%
   mutate(model = rep(c(rep("forward", 1000), rep("lasso", 1000)), 4))
 
+# df for number of weak predictors included
 n.weak.model = rbind(
   matrix(data = metrics1$n.weak, nrow = 2000, ncol = 1),
   matrix(data = metrics4$n.weak, nrow = 2000, ncol = 1),
@@ -228,6 +232,7 @@ n.weak.model = rbind(
   as.data.frame %>%
   rename(n.weak = "V1") 
 
+# df for number of strong predictors included
 n.strong.model = rbind(
   matrix(data = metrics1$n.strong, nrow = 2000, ncol = 1),
   matrix(data = metrics4$n.strong, nrow = 2000, ncol = 1),
@@ -237,6 +242,7 @@ n.strong.model = rbind(
   as.data.frame %>%
   rename(n.strong = "V1") 
 
+# combine above df's 
 missing_weak_df = model.size %>%
   bind_cols(n.weak.model) %>%
   bind_cols(n.strong.model) %>%
@@ -246,6 +252,7 @@ missing_weak_df = model.size %>%
                           rep(20, 2000))) %>%
   mutate(n.missing = n.weak.total - n.weak)
 
+# retrieve MSE from scenarios
 mse1 = metrics1$MSE.df[,c(1,2)] %>%
   as.data.frame() %>%
   rename(forward = "avg.MSE.forward", lasso = "avg.MSE.lasso") %>%
@@ -263,14 +270,13 @@ mse10 = metrics10$MSE.df[,c(1,2)] %>%
   rename(forward = "avg.MSE.forward", lasso = "avg.MSE.lasso") %>%
   gather(key = "model", value = "MSE")
 
-
-
 mse.df = bind_rows(mse1, mse4, mse7, mse10)
 
+# df of MSE to plot with
 plot.df = bind_cols(missing_weak_df, mse.df) %>%
   select(-model1)
 
-# proportion missing versus MSE
+## PLOT proportion missing versus MSE
 plot.df %>%
   mutate(prop.missing = n.missing/n.weak.total) %>% # proportion of weak predictors absent from model
   group_by(prop.missing, n.weak.total, model) %>%
@@ -291,7 +297,7 @@ plot.df %>%
   theme(legend.position = "bottom")
 
 
-# MSE of strong and weak predictors by each model
+# MSE of strong predictors by each model
 mse.strong1 = metrics1$MSE.df[,c(3, 5)] %>%
   as.data.frame() %>%
   rename(forward = "avg.forward.strong", lasso = "avg.lasso.strong") %>%
@@ -317,6 +323,7 @@ mse.strong10 = metrics10$MSE.df[,c(3, 5)] %>%
   mutate(predictor = "strong",
          n.weak = 20)
 
+# MSE of weak predictors by each model
 mse.weak1 = metrics1$MSE.df[,c(4, 6)] %>%
   as.data.frame() %>%
   rename(forward = "avg.forward.weak", lasso = "avg.lasso.weak") %>%
@@ -342,16 +349,49 @@ mse.weak10 = metrics10$MSE.df[,c(4, 6)] %>%
   mutate(predictor = "weak",
          n.weak = 20)
 
+# MSE of null predictors by each model
+mse.null1 = metrics1$MSE.df[,c(7, 8)] %>%
+  as.data.frame() %>%
+  rename(forward = "avg.forward.null", lasso = "avg.lasso.null") %>%
+  gather(key = "model", value = "MSE") %>%
+  mutate(predictor = "null",
+         n.weak = 2)
+mse.null4 = metrics4$MSE.df[,c(7, 8)] %>%
+  as.data.frame() %>%
+  rename(forward = "avg.forward.null", lasso = "avg.lasso.null") %>%
+  gather(key = "model", value = "MSE") %>%
+  mutate(predictor = "null",
+         n.weak = 8)
+mse.null7 = metrics7$MSE.df[,c(7, 8)] %>%
+  as.data.frame() %>%
+  rename(forward = "avg.forward.null", lasso = "avg.lasso.null") %>%
+  gather(key = "model", value = "MSE") %>%
+  mutate(predictor = "null",
+         n.weak = 14)  
+mse.null10 = metrics10$MSE.df[,c(7, 8)] %>%
+  as.data.frame() %>%
+  rename(forward = "avg.forward.null", lasso = "avg.lasso.null") %>%
+  gather(key = "model", value = "MSE") %>%
+  mutate(predictor = "null",
+         n.weak = 20)
+
 
 mse_predtype_df = bind_rows(mse.strong1, mse.strong4, mse.strong7, mse.strong10,
-                            mse.weak1, mse.weak4, mse.weak7, mse.weak10)
+                            mse.weak1, mse.weak4, mse.weak7, mse.weak10,
+                            mse.null1, mse.null4, mse.null7, mse.null10)
 
-## plot of MSE for strong and weak predictor by model across scenarios
+## PLOT of MSE for strong and weak predictor by model across scenarios
 mse_predtype_df %>%
   group_by(predictor, model, n.weak) %>%
   summarise(mse = mean(MSE)) %>%
-  ggplot(aes(x = n.weak, y = mse, color = model)) +
-  geom_point(aes(size = 3)) +
+  ggplot(aes(x = n.weak, y = mse, color = predictor)) +
+  geom_point() +
   geom_line() +
-  facet_grid(.~predictor)
+  facet_grid(.~model) +
+  labs(
+    x = "Total number of weak predictors",
+    y = "MSE of beta coefficients estimates"
+  ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
   
