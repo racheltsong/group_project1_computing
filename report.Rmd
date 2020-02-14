@@ -1,0 +1,140 @@
+---
+title: "Project 1, topic 3: Comparing variable selection methods"
+author: "Xue Jin, Ruoyuan Qian, Adeline Shin, Rachel Tsong, Alyssa Vanderbeek"
+date: "2/14/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Objectives
+
+When dealing with high-dimensional data, we are often interested in developing a model that maximizes predictive capability while minimizing complexity. There are several variable selection methods that seek to choose the best set of predictors. Some, including as stepwise forward selection, use a pre-specified criterion like AIC or p-value to iteratively add predictors to a null model until an acceptable threshold is reached. Others such as LASSO or ridge regression, apply a regularization parameter to shrink some coefficients towards zero to aid in feature selection.  
+
+Identifying strong predictors of the outcome of interest, and distinguishing them from null predictors, are always central goals of variable selection. But a less understood issue in variable selection is the presence of weak predictors - variables with small but non-zero effects. It may be difficult for variable selection methods to distinguish these weak predictors from null predictors. This challenge can be further complicated by the weak predictors’ correlation with other variables. The main objective of this simulation study is to compare the performance of stepwise forward selection to LASSO regression in identifying and estimating strong, weak-but-correlated (WBC), weak-and-independent (WAI), and null predictors.
+
+## Statistical Methods Studied
+
+### Stepwise Forward Selection
+
+Stepwise forward selection starts with the null model and adds predictors until a given criterion is optimized. In our simulations, we used the Akaike Information Criterion (AIC), which rewards model goodness-of-fit as assessed by the likelihood function while penalizing model complexity (number of parameters). The AIC is defined as follows:
+
+$$\text{AIC} = n\ln({\textstyle\sum_{i=1}^n}y_i-\hat{y_i})^2/n)+2p$$
+
+### LASSO
+
+LASSO regression is not a criterion based method. Instead, LASSO shrinks coefficient estimates to zero by applying a penalty term, so the LASSO technique tends to yield sparse models. The equation for estimating LASSO coefficients is:
+
+$$\underset{\beta}{min}\frac1{2n}{\textstyle\sum_{i=1}^n}(y_i-x_i\beta)^2+\lambda||{\textstyle\sum_{k=1}^p}|\beta_k|$$
+
+Lambda is a tuning parameter that was chosen in our simulations using 10-fold cross-validation.
+
+## Scenarios Investigated
+
+Several parameters are specified in our simulations, including the total number of predictors; the number of strong, WBC, WAI, and null predictors, the degree of correlation for the WBC predictors; and the condition that distinguishes strong from weak from null predictors. We vary the number of weak predictors and the degree of correlation to compare forward selection and LASSO regression under 8 scenarios (Table 1). Note that in each scenario, the number of weak predictors is evenly split between WBC and WAI. 
+
+Definition of strong signals:
+
+$$S_1=\{j:|\beta_j|>c\sqrt{log(p)/n},\text{ some } c>0,1{\leq}j{\leq}p\}$$
+
+Definition of WBC signals:
+
+$$S_2=\{j:0<|\beta_j|\leq\sqrt{log(p)/n},\text{ some } \;c>0,corr(X_j,{X'_j})\neq0,for\;\text{ some } \; j'\in{S_1},1{\leq}j{\leq}p\}$$
+
+Definition of WAI signals:
+
+$$S_3=\{j:0<|\beta_j|\leq\sqrt{log(p)/n},\text{ some } \;c>0,corr(X_j,{X'_j})=0,for\;all\; j'\in{S_1},1{\leq}j{\leq}p\}$$
+
+
+## Methods for Generating Data
+
+Data is generated using a 4-step method:
+
+1. Fix number of strong, WAI, and WBC predictors 
+2. Randomly populate a variance-covariance matrix $\Sigma$ with correlations between strong, weak, and null predictors
+3. Generate data $X \sim MVN(0, \Sigma)$
+4. Generate coefficients for strong and weak predictors from a $N(0, 1)$ distribution, based on established distinguishing condition
+5. Generate outcome data from a linear model
+
+This process insures that the number of different predictor types are fixed, but which predictors fall into which class is varied between simulations. 
+
+## Performance Measures
+
+### Ability of Model to Identify Weak and Strong Predictors
+
+One method of assessing how well a model does in variable selection is in the identification and inclusion of true predictors in a model, as well as the exclusion of null predictors in the final model. Two main metrics are used to test the model ability to identify true predictors: type I error and power. The following definitions were used for these metrics:
+
+$$\text{Type I Error} = \frac{\text{number of null predictors in the model}}{\text{total number of null predictors in the data}}$$
+
+$$\text{Power} = \frac{\text{number of true predictors in the model}}{\text{total number of true predictors in the data}}$$
+
+
+### Effect of Missing Weak Predictors
+
+On the other hand, if a model fails to include a weak parameter by classifying it as a null predictor, this may also affect the outcome and overall fit of the model. To assess the effect of a model missing these weak predictors, the squared error (SE) and mean squared error (MSE) of coefficient estimates was calculated for all eight scenarios according to the following equations:
+
+$$SE = (\hat{\beta} - \beta_0)^2$$
+
+$$MSE = E(\hat{\beta} - \beta_0)^2$$
+
+
+## Results
+
+According to Table 2, forward stepwise always includes more predictors than the number of true predictors in original data while LASSO is more selective.
+
+### Scenarios 1-4: Varying total number of weak predictors 
+
+*Type I error and power*
+
+While both methods do are decent at selecting true predictors for the model, LASSO is much better at excluding null predictors than forward selection (Table 3). 
+
+Consequently, the type I error of forward stepwise can get quite high. Although it has a decreasing trend while the total number of weak predictors increases, it still chooses more null predictors in the model than LASSO. LASSO is also more stable regardless of the number of weak predictors.
+
+The power of the two methods is similar, and when the number of weak predictors increases, the power of LASSO is slightly higher, meaning that LASSO includes more true predictors than forward stepwise when the number of weak predictors is large.
+
+*Coefficient estimation*
+
+Although the median SE of the coefficient estimates for forward stepwise is lower than LASSO, its MSE is higher when there are few true weak predictors in the data. Additionally, the variance for forward stepwise is much larger when the weak predictors is lower than 8, suggesting that the estimation of forward stepwise is not stable compared to LASSO when number of weak predictors is small. The MSE under both methods decreases as the number of true weak predictors in the data increases. (Figure 2).
+
+Broken down by predictor type, both methods have inflated MSE of the weak predictors, whereas they have comparatively low MSE for strong and null coefficients. The estimates of all kinds of predictors in LASSO are more accurate than the forward stepwise when the number of weak predictors is smaller than 14. (Figure 3)
+
+As the proportion of weak predictors that are missing from the model increases, the overall MSE across predictor types increases in both methods (Figure 4), due to the increasing proportion of strong predictors that are instead included (Figure 5).
+
+### Scenarios 4-8: Varying degree of correlation
+
+*Type I error and power*
+
+As the correlation of the WBC predictors increases, the type I error for forward stepwise and LASSO remain fairly constant around 0.35 and 0.05, respectively. Meanwhile, the power of forward selection increases, while the power of LASSO decreases slightly. (Figure 6)  
+
+*Coefficient estimation*
+
+Although forward stepwise selection includes more non-null predictors on average (Table 3), it has increasing and higher MSE compared with LASSO, showing a growing trend when correlation becomes larger. The MSE of LASSO is controlled under 0.1, whereas forward selection has an inflated MSE (over 0.2) when the correlation gets very high. 
+
+## Conclusion
+
+### General
+
+Forward stepwise selection always includes more predictors than LASSO, and the model size given by each method increases as the number of total true predictors in the original data increases. The type I error of forward stepwise is consistently inflated compared to LASSO, suggesting that forward selection tends to include more null predictors into the model. The power of two models is similar and performs slightly differently in different scenarios. Finally, the MSE of  LASSO is smaller and more stable than the forward stepwise, meaning that although the powers of two methods are close, the estimation of LASSO is more accurate than the forward stepwise.
+
+### Varying total number of weak predictors
+
+The SE variance for forward stepwise is much larger than LASSO when the number of weak predictors is small, meaning that the estimation of forward stepwise is not stable compared to LASSO. Besides, when the number of weak predictors increases, both methods have greater chance to include true predictors, the MSE decreases. The total MSE is raised in both methods by the estimation of weak coefficients. Both methods see a decreasing trend in MSE as the ratio of missing weak predictors increases, because the more true predictors in original data, the larger number of strong predictors in the model. Moreover, the estimates of all kinds of predictors in LASSO are more accurate than the forward stepwise when the number of weak predictors is small. 
+
+### Varying degree of correlation
+
+With increased correlation, the forward stepwise tends to obtain higher power but also higher type I error by including more null predictors into the model, compared with LASSO.
+
+The MSE of coefficient estimates given in forward selection is high compared to LASSO, and increases with increasing degree of correlation. 
+
+## Discussion
+
+As the degree of correlation increases, the power of LASSO is less than forward stepwise, which may be because that LASSO tends to select only one predictor when the pairwise correlation is very high. An potentially interesting facet of this selection process is LASSO’s rate of selecting strong versus WBC predictors, but we did not examine this in our analysis. The fact that forward selection has higher power but higher MSE with increased correlation may be a result of a higher number of correlated variables being selected in the model. Meanwhile, LASSO controls better for this by generally selecting only one of two correlated variables. 
+
+Overall, our study shows the relative merits of each variable selection process under different data composition. Although LASSO generally had favorable type I error and MSE, robust to scenarios explored, the choice of method depends ultimately on the specific goal of the model. In this study, we did not look at the predictive ability of either method. LASSO generates more parsimonious models, but it may be that by including more predictors, forward selection results in more accurate predictions. Depending on the preference for interpretability versus prediction, either method may be suitable. 
+
+Additionally, this study explored the performance of these two methods under variation of two variables. Many other parameters may be varied to further assess performance, including the total number of predictors and the condition to distinguish strong from weak from null predictors. 
+
+
+
